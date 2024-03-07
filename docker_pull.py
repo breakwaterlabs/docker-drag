@@ -69,13 +69,14 @@ def progress_bar(ublob, nb_traits):
 	sys.stdout.flush()
 
 # Fetch manifest v2 and get image layer digests
-auth_head = get_auth_head('application/vnd.docker.distribution.manifest.v2+json')
+auth_head = get_auth_head('application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json')
 resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
-if (resp.status_code != 200):
-	print('[-] Cannot fetch manifest for {} [HTTP {}]'.format(repository, resp.status_code))
-	print(resp.content)
-	auth_head = get_auth_head('application/vnd.docker.distribution.manifest.list.v2+json')
-	resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
+if (resp.status_code != 200 or "layers" not in resp.json().keys()):
+	if resp.status_code != 200:
+		print('[-] Cannot fetch manifest for {} [HTTP {}]'.format(repository, resp.status_code))
+		print(resp.content)
+		auth_head = get_auth_head('application/vnd.docker.distribution.manifest.list.v2+json')
+		resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
 	if (resp.status_code == 200):
 		print('[+] Manifests found for this tag (use the @digest format to pull the corresponding image):')
 		manifests = resp.json()['manifests']
