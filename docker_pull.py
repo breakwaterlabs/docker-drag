@@ -68,23 +68,38 @@ def progress_bar(ublob, nb_traits):
 	sys.stdout.write(']')
 	sys.stdout.flush()
 
+def fetch_manifests(registry, repository, tag, auth_head): 
+	resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
+	if (resp.status_code != 200 or "layers" not in resp.json().keys()):
+		if resp.status_code != 200:
+			print('[-] Cannot fetch manifest for {} [HTTP {}]'.format(repository, resp.status_code))
+			print(resp.content)
+			auth_head = get_auth_head('application/vnd.docker.distribution.manifest.list.v2+json')
+			resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
+		if (resp.status_code == 200):
+			print('[+] Manifests found for this tag (use the @digest format to pull the corresponding image):')
+			manifests = resp.json()['manifests']
+			import platform
+			compat_arches = []
+			for manifest in manifests:
+				for key, value in manifest["platform"].items():
+					sys.stdout.write('{}: {}, '.format(key, value))
+				if manifest['platform']['architecture'].casefold() == platform.machine().casefold():
+					compat_arches.append(manifest)
+				print('digest: {}'.format(manifest["digest"]))
+			if len(compat_arches) >= 1:
+				print('Found likely arches:')
+				compat_arches
+				if len(compat_arches) == 1:
+					our_manifest = compat_arches[0]
+					print('Attempting to download digest for matching arch ({}): {}'.format(our_manifest['platform']['architecture'], our_manifest['digest']))
+					return fetch_manifests(registry, repository, our_manifest['digest'], auth_head)
+	else:
+		return resp
+
 # Fetch manifest v2 and get image layer digests
 auth_head = get_auth_head('application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json')
-resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
-if (resp.status_code != 200 or "layers" not in resp.json().keys()):
-	if resp.status_code != 200:
-		print('[-] Cannot fetch manifest for {} [HTTP {}]'.format(repository, resp.status_code))
-		print(resp.content)
-		auth_head = get_auth_head('application/vnd.docker.distribution.manifest.list.v2+json')
-		resp = requests.get('https://{}/v2/{}/manifests/{}'.format(registry, repository, tag), headers=auth_head, verify=False)
-	if (resp.status_code == 200):
-		print('[+] Manifests found for this tag (use the @digest format to pull the corresponding image):')
-		manifests = resp.json()['manifests']
-		for manifest in manifests:
-			for key, value in manifest["platform"].items():
-				sys.stdout.write('{}: {}, '.format(key, value))
-			print('digest: {}'.format(manifest["digest"]))
-	exit(1)
+resp = fetch_manifests(registry, repository, tag, auth_head)
 layers = resp.json()['layers']
 
 # Create tmp folder that will hold the image
