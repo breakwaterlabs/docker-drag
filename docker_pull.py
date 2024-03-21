@@ -8,6 +8,7 @@ import shutil
 import requests
 import tarfile
 import urllib3
+from pathlib import Path
 urllib3.disable_warnings()
 
 if len(sys.argv) != 2 :
@@ -216,5 +217,7 @@ sys.stdout.flush()
 tar = tarfile.open(docker_tar, "w")
 tar.add(imgdir, arcname=os.path.sep)
 tar.close()
+Path(registry).mkdir(parents=True, exist_ok=True)
 shutil.rmtree(imgdir)
+shutil.move(docker_tar, registry)
 print('\rDocker image pulled: ' + docker_tar)
